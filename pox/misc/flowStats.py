@@ -7,9 +7,13 @@ from collections import defaultdict
 from pox.openflow.discovery import Discovery  
 from pox.lib.util import dpid_to_str  
 import time
+import os
+import re
 
 # How much bytes to block flow
 MAX_BYTES = 1000
+# file='stats.csv' 
+# filetowrite = open(file, 'w+')
 
 def mean(numbers):
 	return sum(numbers) / len(numbers)
@@ -265,10 +269,9 @@ class FullFlow:
 		# print("active_max: {}".format(active_max))
 		# print("active_mean: {}".format(active_mean))
 		# print("active_std: {}".format(active_std))
-
-		file='stats.csv' 
-		with open(file, 'w') as filetowrite:
-			filetowrite.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}".format(self.forward.src,self.forward.tp_src,self.forward.dst,self.forward.tp_dst,total_fpackets,total_fvolume,total_bpackets,total_bvolume,fiat_min,fiat_mean,fiat_max,fiat_std,biat_min,biat_mean,biat_max,biat_std,duration,active_min,active_mean,active_max,active_std,idle_min,idle_mean,idle_max,idle_std,flowiat_min,flowiat_mean,flowiat_max,flowiat_std,fb_psec,fp_psec))
+		statsline = "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}".format(self.forward.src,self.forward.tp_src,self.forward.dst,self.forward.tp_dst,total_fpackets,total_fvolume,total_bpackets,total_bvolume,fiat_min,fiat_mean,fiat_max,fiat_std,biat_min,biat_mean,biat_max,biat_std,duration,active_min,active_mean,active_max,active_std,idle_min,idle_mean,idle_max,idle_std,flowiat_min,flowiat_mean,flowiat_max,flowiat_std,fb_psec,fp_psec)
+		print(statsline)
+		#filetowrite.write(statsline)
 	
 	def __eq__(self, other):
 		return self.forward == other.forward
@@ -311,8 +314,10 @@ class tableStats(EventMixin):
 					self.fullFlows.append(FullFlow(flow))
 			# Add reading to flow
 			flow.add(f.duration_sec, f.byte_count, f.packet_count)
+		# if os.path.exists(file):
+		# 	os.remove(file)
 		for f in self.fullFlows:
-			f.printValues()
+			#f.printValues()
 			if f.isFlow():
 				f.printStats()
 			# Blocking Logic
@@ -349,6 +354,6 @@ class tableStats(EventMixin):
 		print("Send flow stat message to Switch %s " % event.dpid)
 
 
-def launch(interval='5'):
+def launch(interval='10'):
 	interval = int(interval)
 	core.registerNew(tableStats, interval)

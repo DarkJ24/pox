@@ -8,6 +8,9 @@ from pox.openflow.discovery import Discovery
 from pox.lib.util import dpid_to_str  
 import time
 
+# How much bytes to block flow
+MAX_BYTES = 1000
+
 def mean(numbers):
 	return sum(numbers) / len(numbers)
 
@@ -23,7 +26,7 @@ def std(numbers):
 
 
 class Flow:
-	def __init__(self, src, dst, tp_src, tp_dst):
+	def __init__(self, src, dst, tp_src, tp_dst, match=None):
 		self.src = src
 		self.dst = dst
 		self.tp_src = tp_src
@@ -31,11 +34,19 @@ class Flow:
 		self.durations = []
 		self.bytes = []
 		self.packets = []
+		self.match = match
+		self.blocked = False
 	
 	def add(self, duration, bytes, packets):
 		self.durations.append(duration)
 		self.bytes.append(bytes)
 		self.packets.append(packets)
+
+	def needsBlocking(self):
+		return self.bytes[len(self.bytes) - 1] > MAX_BYTES and not self.blocked
+
+	def description(self):
+		return "{}:{} -> {}:{}".format(self.src, self.tp_src, self.dst, self.tp_dst)
 
 	def printValues(self):
 		print("SRC: {}:{}".format(self.src, self.tp_src))
@@ -60,6 +71,9 @@ class FullFlow:
 
 	def isFlow(self):
 		return self.hasBothFlows() and len(self.forward.durations) > 1 and len(self.backward.durations) > 1
+
+	def needsBlocking(self):
+		return self.forward.bytes[len(self.forward.bytes) - 1] + self.backward.bytes[len(self.backward.bytes) - 1] if hasattr(self, 'backward') else 0 > MAX_BYTES
 
 	def printValues(self):
 		print("-------------------------------------")
@@ -219,29 +233,42 @@ class FullFlow:
 		active_max = max(actives)
 		active_mean = mean(actives)
 		active_std = std(actives)
-		print("Duration: {}".format(fullDuration))
-		print("fb_psec: {}".format(fb_psec))
-		print("fp_psec: {}".format(fp_psec))
-		print("fiat_min: {}".format(fiat_min))
-		print("fiat_max: {}".format(fiat_max))
-		print("fiat_mean: {}".format(fiat_mean))
-		print("fiat_std: {}".format(fiat_std))
-		print("biat_min: {}".format(biat_min))
-		print("biat_max: {}".format(biat_max))
-		print("biat_mean: {}".format(biat_mean))
-		print("biat_std: {}".format(biat_std))
-		print("flowiat_min: {}".format(flowiat_min))
-		print("flowiat_max: {}".format(flowiat_max))
-		print("flowiat_mean: {}".format(flowiat_mean))
-		print("flowiat_std: {}".format(flowiat_std))
-		print("idle_min: {}".format(idle_min))
-		print("idle_max: {}".format(idle_max))
-		print("idle_mean: {}".format(idle_mean))
-		print("idle_std: {}".format(idle_std))
-		print("active_min: {}".format(active_min))
-		print("active_max: {}".format(active_max))
-		print("active_mean: {}".format(active_mean))
-		print("active_std: {}".format(active_std))
+		# Packets and Bytes(volumes)
+		total_fpackets = sum(self.forward.packets)
+		total_bpackets = sum(self.backward.packets)
+		total_fvolume = sum(self.forward.bytes)
+		total_bvolume = sum(self.backward.bytes)
+		# print("Duration: {}".format(fullDuration))
+		# print("total_fpackets: {}".format(total_fpackets))
+		# print("total_bpackets: {}".format(total_bpackets))
+		# print("total_fvolume: {}".format(total_fvolume))
+		# print("total_bvolume: {}".format(total_bvolume))
+		# print("fb_psec: {}".format(fb_psec))
+		# print("fp_psec: {}".format(fp_psec))
+		# print("fiat_min: {}".format(fiat_min))
+		# print("fiat_max: {}".format(fiat_max))
+		# print("fiat_mean: {}".format(fiat_mean))
+		# print("fiat_std: {}".format(fiat_std))
+		# print("biat_min: {}".format(biat_min))
+		# print("biat_max: {}".format(biat_max))
+		# print("biat_mean: {}".format(biat_mean))
+		# print("biat_std: {}".format(biat_std))
+		# print("flowiat_min: {}".format(flowiat_min))
+		# print("flowiat_max: {}".format(flowiat_max))
+		# print("flowiat_mean: {}".format(flowiat_mean))
+		# print("flowiat_std: {}".format(flowiat_std))
+		# print("idle_min: {}".format(idle_min))
+		# print("idle_max: {}".format(idle_max))
+		# print("idle_mean: {}".format(idle_mean))
+		# print("idle_std: {}".format(idle_std))
+		# print("active_min: {}".format(active_min))
+		# print("active_max: {}".format(active_max))
+		# print("active_mean: {}".format(active_mean))
+		# print("active_std: {}".format(active_std))
+
+		file='stats.csv' 
+		with open(file, 'w') as filetowrite:
+			filetowrite.write("{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}".format(self.forward.src,self.forward.tp_src,self.forward.dst,self.forward.tp_dst,total_fpackets,total_fvolume,total_bpackets,total_bvolume,fiat_min,fiat_mean,fiat_max,fiat_std,biat_min,biat_mean,biat_max,biat_std,duration,active_min,active_mean,active_max,active_std,idle_min,idle_mean,idle_max,idle_std,flowiat_min,flowiat_mean,flowiat_max,flowiat_std,fb_psec,fp_psec))
 	
 	def __eq__(self, other):
 		return self.forward == other.forward
@@ -266,7 +293,7 @@ class tableStats(EventMixin):
 			#print(f.actions[0].__dict__)
 			#print(f.match)
 
-			flow = Flow(f.match.nw_src, f.match.nw_dst, f.match.tp_src if hasattr(f.match, 'tp_src') else None, f.match.tp_dst if hasattr(f.match, 'tp_dst') else None)
+			flow = Flow(f.match.nw_src, f.match.nw_dst, f.match.tp_src if hasattr(f.match, 'tp_src') else None, f.match.tp_dst if hasattr(f.match, 'tp_dst') else None, f.match)
 			if flow in self.flows:
 				# Flow exists: Assign flow to the flow variable
 				index = self.flows.index(flow)
@@ -288,6 +315,32 @@ class tableStats(EventMixin):
 			f.printValues()
 			if f.isFlow():
 				f.printStats()
+			# Blocking Logic
+			# if f.forward.needsBlocking():
+			# 	# Block Flow
+			# 	print("-------------------------------------")
+			# 	print("Blocking flow: {}", f.forward.description())
+			# 	msg = of.ofp_flow_mod()
+			# 	msg.command = 1 # OFPFC_MODIFY
+			# 	msg.match = f.forward.match
+			# 	msg.idle_timeout = 0
+			# 	msg.hard_timeout = 0
+			# 	msg.actions = []
+			# 	event.connection.send(msg)
+			# 	f.forward.blocked = True
+			# if hasattr(f, 'backward') and f.backward.needsBlocking():
+			# 	# Block Flow
+			# 	print("-------------------------------------")
+			# 	print("Blocking flow: {}", f.backward.description())
+			# 	msg = of.ofp_flow_mod()
+			# 	msg.command = 1  # OFPFC_MODIFY
+			# 	msg.match = f.backward.match
+			# 	msg.idle_timeout = 0
+			# 	msg.hard_timeout = 0
+			# 	msg.actions = []
+			# 	event.connection.send(msg)
+			# 	f.backward.blocked = True
+
 		Timer(self.interval, self.sendTableStatsRequest, args=[event])
 
 	def sendTableStatsRequest(self, event):

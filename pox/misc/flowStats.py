@@ -9,6 +9,7 @@ from pox.lib.util import dpid_to_str
 import time
 import os
 import re
+from pox.misc import botnet_predictor
 
 # How much bytes to block flow
 MAX_BYTES = 1000
@@ -269,9 +270,19 @@ class FullFlow:
 		# print("active_max: {}".format(active_max))
 		# print("active_mean: {}".format(active_mean))
 		# print("active_std: {}".format(active_std))
-		statsline = "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}".format(self.forward.src,self.forward.tp_src,self.forward.dst,self.forward.tp_dst,total_fpackets,total_fvolume,total_bpackets,total_bvolume,fiat_min,fiat_mean,fiat_max,fiat_std,biat_min,biat_mean,biat_max,biat_std,duration,active_min,active_mean,active_max,active_std,idle_min,idle_mean,idle_max,idle_std,flowiat_min,flowiat_mean,flowiat_max,flowiat_std,fb_psec,fp_psec)
-		print(statsline)
+		# statsline = "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}".format(self.forward.src,self.forward.tp_src,self.forward.dst,self.forward.tp_dst,total_fpackets,total_fvolume,total_bpackets,total_bvolume,fiat_min,fiat_mean,fiat_max,fiat_std,biat_min,biat_mean,biat_max,biat_std,duration,active_min,active_mean,active_max,active_std,idle_min,idle_mean,idle_max,idle_std,flowiat_min,flowiat_mean,flowiat_max,flowiat_std,fb_psec,fp_psec)
+		# print(statsline)
 		#filetowrite.write(statsline)
+		prediction = botnet_predictor.predict([self.forward.src,self.forward.tp_src,self.forward.dst,self.forward.tp_dst,total_fpackets,total_fvolume,total_bpackets,total_bvolume,fiat_min,fiat_mean,fiat_max,fiat_std,biat_min,biat_mean,biat_max,biat_std,duration,active_min,active_mean,active_max,active_std,idle_min,idle_mean,idle_max,idle_std,flowiat_min,flowiat_mean,flowiat_max,flowiat_std,fb_psec,fp_psec])
+
+		print("-------------------------------------")
+		print("Flow: {}:{} <-> {}:{}".format(self.forward.src, self.forward.tp_src, self.forward.dst, self.forward.tp_dst))
+		if prediction == 0:
+			print('Predición: Tráfico Normal')
+		else:
+			if prediction == 1:
+				print('Predición: Tráfico Botnet (rbot)')
+		
 	
 	def __eq__(self, other):
 		return self.forward == other.forward
